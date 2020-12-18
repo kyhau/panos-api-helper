@@ -5,7 +5,6 @@ Author: Kay Hau <virtualda@gmail.com>
 """
 import json
 import logging
-from genericpath import exists
 from os.path import exists, expanduser, join
 from time import time
 from urllib.parse import urlencode
@@ -13,6 +12,7 @@ from urllib.parse import urlencode
 import click
 import urllib3
 import xmltodict
+from genericpath import exists
 
 logging.getLogger().setLevel(logging.INFO)
 logging.getLogger("urllib3.connectionpool").setLevel(logging.CRITICAL)
@@ -68,14 +68,30 @@ class PanosXmlApiClient:
 
         resp = PanosXmlApiClient.send_api_request(f, cmd)
 
-        data_dict = xmltodict.parse(resp.data)
-        if resp.status == 200:
+       # Convert OrderedDict to dict
+        data_dict = json.loads(json.dumps(xmltodict.parse(resp.data)))
+
+        if resp.status == 200 and data_dict["response"]["@status"] == "success":
             result = data_dict["response"]["result"]["rules"]["entry"]
         else:
-            result = data_dict["response"]
+            result = data_dict["response"]["msg"]
+        return result
+
+    @staticmethod
+    def global_protect_gateway(f, gateway="GP-Gateway"):
+        cmd = "<show><global-protect-gateway><current-user><gateway>" \
+            f"{gateway}</gateway></current-user></global-protect-gateway></show>"
+
+        resp = PanosXmlApiClient.send_api_request(f, cmd)
 
         # Convert OrderedDict to dict
-        return json.loads(json.dumps(result))
+        data_dict = json.loads(json.dumps(xmltodict.parse(resp.data)))
+
+        if resp.status == 200 and data_dict["response"]["@status"] == "success":
+            result = data_dict["response"]["result"]["entry"]
+        else:
+            result = data_dict["response"]["result"]["msg"]
+        return result
 
 
 def find_fw_url(fw_group):
@@ -93,13 +109,37 @@ def find_fw_url(fw_group):
             logging.warning(f"{fw_group} {f} unreachable - skipped")
 
 
-@click.command(help="Search firewall rule.")
+def find_user_by_ip(ip, fw_group):
+    """Find user by IP"""
+
+    for f in FIREWALLS[fw_group]:
+        try:
+            logging.info(f"Checking {f}...")
+            items = PanosXmlApiClient.global_protect_gateway(f)
+            if items:
+                for i in items:
+                    if type(i) == dict and ip in [i.get("virtual-ip"), i.get("public-ip"), i.get("client-ip")]:
+                        result = i
+                        result["firewall-url"] = f
+                        return result
+        except Exception as e:
+            logging.error(e)
+            logging.warning(f"{f} unreachable - skipped")
+    return None
+
+
+@click.group(invoke_without_command=False, help="TODO Help 1")
+def main_cli():
+    pass
+
+
+@main_cli.command(help="Find firewall rule.")
 @click.argument("src_ip")
 @click.argument("dst_ip")
 @click.argument("dst_port")
 @click.option("--fw-group", "-g", required=True, type=click.Choice(FW_GROUPS, case_sensitive=False), help="Firewall group")
 @click.option("--protocol", "-p", default="tcp", type=click.Choice(["tcp", "udp"], case_sensitive=False), help="Protocol")
-def main(src_ip, dst_ip, dst_port, protocol, fw_group):
+def find_fw_rule(src_ip, dst_ip, dst_port, protocol, fw_group):
     start = time()
     try:
         fw_url = find_fw_url(fw_group)
@@ -112,5 +152,17 @@ def main(src_ip, dst_ip, dst_port, protocol, fw_group):
         logging.info(f"Total execution time: {time() - start}s")
 
 
+@main_cli.command(help="Find user by IP")
+@click.argument("ip", type=click.STRING)
+@click.option("--fw-group", "-g", required=True, type=click.Choice(FW_GROUPS, case_sensitive=False), help="Firewall group")
+def find_user(ip, fw_group):
+    start = time()
+    try:
+        result = find_user_by_ip(ip, fw_group)
+        print(json.dumps(result, indent=2))
+    finally:
+        logging.info(f"Total execution time: {time() - start}s")
+
+
 if __name__ == "__main__":
-     main()
+    main_cli(obj={"debug": "true"})
