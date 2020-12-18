@@ -31,5 +31,10 @@ See also the CLI [`test security-policy-match`](https://docs.paloaltonetworks.co
 
 4. To find firewall rules that match the given attributes
     ```
-    python panos_api_helper.py SRC_IP DST_IP DST_PORT --fw-group <fw-group-1> --protocol [tcp|udp]
+    python panos_api_helper.py find-fw-rule SRC_IP DST_IP DST_PORT --fw-group <fw-group-1> --protocol [tcp|udp]
+    ```
+
+5. To find user by IP
+    ```
+    python panos_api_helper.py find-user IP --fw-group <fw-group-1>
     ```
