@@ -4,7 +4,6 @@ A simple PAN-OS API helper script for finding firewall rule (security-policy-mat
 
 See also the CLI [`test security-policy-match`](https://docs.paloaltonetworks.com/pan-os/10-0/pan-os-cli-quick-start/use-the-cli/test-the-configuration/test-policy-matches.html) command.
 
-
 ## Usage
 
 1. Create `~/.panos/api_key.json`
